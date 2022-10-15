@@ -85,7 +85,7 @@ jobs:
       - name: build
         env:
           GIT_DESCRIBE: ${{ needs.create_release.outputs.git_describe }}
-        run: 'cargo build --release --frozen'
+        run: 'cargo build --release'
       - run: strip target/release/pw-connections
         if: ${{ matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest' }}
       - uses: actions/upload-artifact@v2
