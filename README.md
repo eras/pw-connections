@@ -47,7 +47,7 @@ links:
   - src: "Novation SL MkIII 1:(capture_2) Novation SL MkIII MIDI 3"
     dst: "Virtual Raw MIDI 4-3 4:(playback_0) VirMIDI 4-3"
   - src: "Novation SL MkIII 1:(capture_0) Novation SL MkIII MIDI 1"
-    dst: "keyboard"
+    dst: "ALC257 Analog:playback_FR"
 ```
 
 Recall that you can pretty much embed JSON inside YAML, so you should
@@ -57,7 +57,7 @@ You can see the names using the excellent
 [`jq`](https://stedolan.github.io/jq/) tool with e.g.
 
 ```
-% pw-dump | jq '.[].info.props."port.name"|select(.)'
+% pw-dump | jq '.[].info.props."port.alias"|select(.)'
 "Midi Through:(capture_0) Midi Through Port-0"
 "Midi Through:(playback_0) Midi Through Port-0"
 "Novation SL MkIII 1:(capture_0) Novation SL MkIII MIDI 1"
@@ -76,11 +76,10 @@ You can see the names using the excellent
 "Virtual Raw MIDI 4-2 4:(playback_0) VirMIDI 4-2"
 "Virtual Raw MIDI 4-3 4:(capture_0) VirMIDI 4-3"
 "Virtual Raw MIDI 4-3 4:(playback_0) VirMIDI 4-3"
-"keyboard"
-"monitor_FL"
-"monitor_FR"
-"playback_FL"
-"playback_FR"
+"ALC257 Analog:monitor_FL"
+"ALC257 Analog:monitor_FR"
+"ALC257 Analog:playback_FL"
+"ALC257 Analog:playback_FR"
 ```
 
 Once running, `pw-connections` should be fire and forget. Connections
