@@ -26,7 +26,7 @@ jobs:
       - name: Install build deps
         run: |
           sudo add-apt-repository ppa:pipewire-debian/pipewire-upstream
-          sudo apt-get install git pipewire pipewire-audio-client-libraries gstreamer1.0-pipewire libpipewire-0.3-{0,dev,modules} libspa-0.2-{bluetooth,dev,jack,modules}
+          sudo apt-get install git pipewire pipewire-audio-client-libraries gstreamer1.0-pipewire libpipewire-0.3-{0,dev,modules} libspa-0.2-{bluetooth,dev,jack,modules} libclang-dev
         if: ${{ matrix.os == 'ubuntu-latest' }}
       - uses: actions-rs/toolchain@v1
         with:
