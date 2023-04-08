@@ -220,7 +220,10 @@ impl Main {
                     props.get("port.id"),
                     props.get("port.direction"),
                 ) {
-                    let port_name = PortName(port_name.clone());
+                    let mut port_name = PortName(port_name.clone());
+                    if let Some(port_alias) = props.get("port.alias") {
+                        port_name = PortName(port_alias.clone())
+                    }
                     let port_id = PortId(port_id.clone());
                     let node_id = NodeId(node_id.clone());
                     let port_direction = PortDirection::from(port_direction);
