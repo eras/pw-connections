@@ -50,6 +50,9 @@ links:
     dst: "ALC257 Analog:playback_FR"
 ```
 
+You can get this kind of output with `pw-connections --dump` as a nice
+starting point.
+
 Recall that you can pretty much embed JSON inside YAML, so you should
 be able to use JSON as configuration as well.
 

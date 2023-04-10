@@ -1,4 +1,4 @@
-use serde_derive::Deserialize;
+use serde_derive::{Serialize, Deserialize};
 use std::{fmt, fs, io};
 use thiserror::Error;
 
@@ -31,20 +31,20 @@ impl fmt::Display for ParseError {
     }
 }
 
-#[derive(Debug, Deserialize, Clone, Eq, Hash, PartialOrd, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialOrd, PartialEq)]
 pub struct PortName(pub String);
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct NamedLink {
     pub src: PortName,
     pub dst: PortName,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct NamedLinks(pub Vec<NamedLink>);
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub links: NamedLinks,
 }
@@ -77,5 +77,9 @@ impl Config {
         };
         println!("Loaded config from {}", filename);
         Ok(config)
+    }
+
+    pub fn dump(&self) {
+	println!("{}", serde_yaml::to_string(&self).expect("Failed to serialize yaml"));
     }
 }

@@ -36,6 +36,9 @@ struct Args {
     /// Name of the config file to use
     #[arg(short, long)]
     config: String,
+
+    #[arg(short, long)]
+    dump: bool,
 }
 
 #[derive(Debug, Clone, Eq, Hash, PartialOrd, PartialEq)]
@@ -199,16 +202,19 @@ struct Main {
     links_by_id: HashMap<LinkObjectId, (PortObjectId<Output>, PortObjectId<Input>)>,
     config_links: config::NamedLinks, // desired state
     failed_pairs: HashSet<(PortName, PortName)>, // remember failed pairs to reduce logging
+
+    dump_and_exit: bool,
 }
 
 impl Main {
-    fn new(config_links: config::NamedLinks) -> Self {
+    fn new(config_links: config::NamedLinks, dump_and_exit: bool) -> Self {
         Main {
             ports: HashMap::default(),
             links: HashMap::default(),
             links_by_id: HashMap::default(),
             config_links,
 	    failed_pairs: HashSet::default(),
+	    dump_and_exit,
         }
     }
 
@@ -294,7 +300,8 @@ impl Main {
         println!("Control thread starting");
         let mut stable; // seems things are settled, no messages in a short while
         #[allow(unused_mut)] let mut enable_dump = false;
-        loop {
+	let mut processing = true;
+        while processing {
             let message = match rx.recv_timeout(time::Duration::from_millis(100)) {
                 Ok(message) => Some(message),
                 Err(RecvTimeoutError::Timeout) => None,
@@ -308,41 +315,58 @@ impl Main {
                 stable = false;
             } else {
                 stable = true;
+		if self.dump_and_exit {
+                    tx.send(PWRequest::Quit)
+                        .expect("communicating with pw failed");
+		    processing = false;
+		    let mut links = config::NamedLinks::default();
+		    for link in &self.links {
+			let src = self.ports.get(&link.0.0.clone().unknown()).map(|x| x.port_name.clone());
+			let dst = self.ports.get(&link.0.1.clone().unknown()).map(|x| x.port_name.clone());
+			if let (Some(src), Some(dst)) = (src, dst) {
+			    links.0.push(config::NamedLink { src, dst });
+			}
+		    }
+		    let config = config::Config { links };
+		    config.dump();
+		}
             }
 
-            let mut name_dir_input_port_id: HashMap<PortName, PortObjectId<Input>> = HashMap::new();
+	    if processing {
+		let mut name_dir_input_port_id: HashMap<PortName, PortObjectId<Input>> = HashMap::new();
 
-            let mut name_dir_output_port_id: HashMap<PortName, PortObjectId<Output>> =
-                HashMap::new();
+		let mut name_dir_output_port_id: HashMap<PortName, PortObjectId<Output>> =
+                    HashMap::new();
 
-            // TODO: maintain in self.process_message
-            // TODO: deal with multiple ports labeled the same
-            // dbg!(());
-            for (port_id, port) in self.ports.iter() {
-                //dbg!(port_id, port);
-                match port.port_direction {
-                    PortDirection::In => {
-                        name_dir_input_port_id
-                            .insert(port.port_name.clone(), port_id.clone().input());
+		// TODO: maintain in self.process_message
+		// TODO: deal with multiple ports labeled the same
+		// dbg!(());
+		for (port_id, port) in self.ports.iter() {
+                    //dbg!(port_id, port);
+                    match port.port_direction {
+			PortDirection::In => {
+                            name_dir_input_port_id
+				.insert(port.port_name.clone(), port_id.clone().input());
+			}
+			PortDirection::Out => {
+                            name_dir_output_port_id
+				.insert(port.port_name.clone(), port_id.clone().output());
+			}
                     }
-                    PortDirection::Out => {
-                        name_dir_output_port_id
-                            .insert(port.port_name.clone(), port_id.clone().output());
-                    }
-                }
-            }
+		}
 
-            if stable {
-                for named_link in self.config_links.0.clone().iter() {
-                    self.do_link(
-                        &name_dir_input_port_id,
-                        &name_dir_output_port_id,
-                        &tx,
-                        &named_link.src,
-                        &named_link.dst,
-                    );
-                }
-            }
+		if stable {
+                    for named_link in self.config_links.0.clone().iter() {
+			self.do_link(
+                            &name_dir_input_port_id,
+                            &name_dir_output_port_id,
+                            &tx,
+                            &named_link.src,
+                            &named_link.dst,
+			);
+                    }
+		}
+	    }
         }
     }
 
@@ -465,7 +489,7 @@ fn work() -> Result<(), error::Error> {
         .global_remove(move |msg| global_remove_callback(&global_remove_tx, msg))
         .register();
 
-    let mut main = Main::new(config.links);
+    let mut main = Main::new(config.links, args.dump);
     let _thread = thread::spawn(move || main.control_thread(global_rx, pwcontrol_tx));
 
     mainloop.run();
