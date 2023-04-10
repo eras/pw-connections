@@ -297,7 +297,6 @@ impl Main {
     }
 
     fn control_thread(&mut self, rx: Receiver<Message>, tx: pw::channel::Sender<PWRequest>) {
-        println!("Control thread starting");
         let mut stable; // seems things are settled, no messages in a short while
         #[allow(unused_mut)] let mut enable_dump = false;
 	let mut processing = true;

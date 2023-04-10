@@ -75,7 +75,6 @@ impl Config {
             }
             Err(error) => return Err(Error::YamlError(error)),
         };
-        println!("Loaded config from {}", filename);
         Ok(config)
     }
 
