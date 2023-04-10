@@ -2,7 +2,7 @@ mod config;
 mod error;
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::From;
 use std::marker::PhantomData;
 use std::rc::Rc;
@@ -198,6 +198,7 @@ struct Main {
     links: Links,
     links_by_id: HashMap<LinkObjectId, (PortObjectId<Output>, PortObjectId<Input>)>,
     config_links: config::NamedLinks, // desired state
+    failed_pairs: HashSet<(PortName, PortName)>, // remember failed pairs to reduce logging
 }
 
 impl Main {
@@ -207,6 +208,7 @@ impl Main {
             links: HashMap::default(),
             links_by_id: HashMap::default(),
             config_links: config_links,
+	    failed_pairs: HashSet::default(),
         }
     }
 
@@ -331,7 +333,7 @@ impl Main {
             }
 
             if stable {
-                for named_link in self.config_links.0.iter() {
+                for named_link in self.config_links.0.clone().iter() {
                     self.do_link(
                         &name_dir_input_port_id,
                         &name_dir_output_port_id,
@@ -345,7 +347,7 @@ impl Main {
     }
 
     fn do_link(
-        &self,
+        &mut self,
         name_dir_input_port_id: &HashMap<PortName, PortObjectId<Input>>,
         name_dir_output_port_id: &HashMap<PortName, PortObjectId<Output>>,
         tx: &pw::channel::Sender<PWRequest>,
@@ -369,6 +371,7 @@ impl Main {
         match has_link {
             None => {
                 // enable_dump = true;
+		let pair = (src_name.clone(), dst_name.clone());
                 if let (Some(src_port_id), Some(dst_port_id)) = (src_port_id, dst_port_id) {
                     let src_port = self
                         .ports
@@ -387,11 +390,13 @@ impl Main {
                     //println!("link {src_port:?} -> {dst_port:?}",);
                     tx.send(PWRequest::MakeLink((src_port.clone(), dst_port.clone())))
                         .expect("communicating with pw failed");
-                } else {
-                    eprintln!(
+		    self.failed_pairs.remove(&pair);
+                } else if !self.failed_pairs.contains(&pair) {
+		    eprintln!(
                         "Cannot link \"{}\" -> \"{}\", both ports not found",
                         src_name.0, dst_name.0
-                    );
+		    );
+		    self.failed_pairs.insert(pair);
                 }
             }
             Some(_link) => {

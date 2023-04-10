@@ -33,14 +33,14 @@ impl fmt::Display for ParseError {
 #[derive(Debug, Deserialize, Clone, Eq, Hash, PartialOrd, PartialEq)]
 pub struct PortName(pub String);
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct NamedLink {
     pub src: PortName,
     pub dst: PortName,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct NamedLinks(pub Vec<NamedLink>);
 
 #[derive(Debug, Deserialize)]
