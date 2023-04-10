@@ -43,13 +43,13 @@ struct ObjectId(String);
 
 impl<Direction> From<PortObjectId<Direction>> for ObjectId {
     fn from(object_id: PortObjectId<Direction>) -> Self {
-        return ObjectId(object_id.0);
+        ObjectId(object_id.0)
     }
 }
 
 impl From<LinkObjectId> for ObjectId {
     fn from(object_id: LinkObjectId) -> Self {
-        return ObjectId(object_id.0);
+        ObjectId(object_id.0)
     }
 }
 
@@ -67,35 +67,35 @@ struct PortObjectId<Direction>(String, PhantomData<Direction>);
 
 impl<Direction> From<ObjectId> for PortObjectId<Direction> {
     fn from(object_id: ObjectId) -> Self {
-        return PortObjectId(object_id.0, PhantomData);
+        PortObjectId(object_id.0, PhantomData)
     }
 }
 
 impl PortObjectId<Unknown> {
     fn input(self) -> PortObjectId<Input> {
-        return PortObjectId::<Input>(self.0, PhantomData);
+        PortObjectId::<Input>(self.0, PhantomData)
     }
 
     fn output(self) -> PortObjectId<Output> {
-        return PortObjectId::<Output>(self.0, PhantomData);
+        PortObjectId::<Output>(self.0, PhantomData)
     }
 }
 
 impl PortObjectId<Input> {
     fn unknown(self) -> PortObjectId<Unknown> {
-        return PortObjectId::<Unknown>(self.0, PhantomData);
+        PortObjectId::<Unknown>(self.0, PhantomData)
     }
 }
 
 impl PortObjectId<Output> {
     fn unknown(self) -> PortObjectId<Unknown> {
-        return PortObjectId::<Unknown>(self.0, PhantomData);
+        PortObjectId::<Unknown>(self.0, PhantomData)
     }
 }
 
 impl<Direction> From<&str> for PortObjectId<Direction> {
     fn from(str: &str) -> Self {
-        return PortObjectId(String::from(str), PhantomData);
+        PortObjectId(String::from(str), PhantomData)
     }
 }
 
@@ -104,7 +104,7 @@ struct LinkObjectId(String);
 
 impl From<ObjectId> for LinkObjectId {
     fn from(object_id: ObjectId) -> Self {
-        return LinkObjectId(object_id.0);
+        LinkObjectId(object_id.0)
     }
 }
 
@@ -207,7 +207,7 @@ impl Main {
             ports: HashMap::default(),
             links: HashMap::default(),
             links_by_id: HashMap::default(),
-            config_links: config_links,
+            config_links,
 	    failed_pairs: HashSet::default(),
         }
     }
@@ -293,7 +293,7 @@ impl Main {
     fn control_thread(&mut self, rx: Receiver<Message>, tx: pw::channel::Sender<PWRequest>) {
         println!("Control thread starting");
         let mut stable; // seems things are settled, no messages in a short while
-        let mut enable_dump = false;
+        #[allow(unused_mut)] let mut enable_dump = false;
         loop {
             let message = match rx.recv_timeout(time::Duration::from_millis(100)) {
                 Ok(message) => Some(message),
@@ -354,15 +354,15 @@ impl Main {
         src_name: &PortName,
         dst_name: &PortName,
     ) {
-        let src_port_id = name_dir_output_port_id.get(&src_name);
-        let dst_port_id = name_dir_input_port_id.get(&dst_name);
+        let src_port_id = name_dir_output_port_id.get(src_name);
+        let dst_port_id = name_dir_input_port_id.get(dst_name);
 
         //dbg!(src_port_id);
 
         let has_link = if let (Some(src_port_id), Some(dst_port_id)) = (&src_port_id, &dst_port_id)
         {
-            let src_port_id = src_port_id.clone().clone().clone();
-            let dst_port_id = dst_port_id.clone().clone().clone();
+            let src_port_id = <&_>::clone(src_port_id).clone();
+            let dst_port_id = <&_>::clone(dst_port_id).clone();
             self.links.get(&(src_port_id, dst_port_id))
         } else {
             None
@@ -388,7 +388,7 @@ impl Main {
                         src_port.port_name.0, &dst_port.port_name.0
                     );
                     //println!("link {src_port:?} -> {dst_port:?}",);
-                    tx.send(PWRequest::MakeLink((src_port.clone(), dst_port.clone())))
+                    tx.send(PWRequest::MakeLink((src_port, dst_port)))
                         .expect("communicating with pw failed");
 		    self.failed_pairs.remove(&pair);
                 } else if !self.failed_pairs.contains(&pair) {
