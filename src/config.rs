@@ -67,13 +67,26 @@ impl Default for Config {
     }
 }
 
+fn is_numeric_string(str: &str) -> bool {
+    for ch in str.chars() {
+	if !ch.is_numeric() {
+	    return false
+	}
+    }
+    true
+}
+
 fn brace_expansion(str: &str) -> Result<Vec<String>, BraceExpansionError>
 {
+    // Performs simple brace expansion for enumerations and ranges,
+    // but not both, and not recursively. See tests for examples.
     let mut result = vec!["".to_string()];
     #[derive(PartialEq)]
     enum State {
 	BeforeBrace,
 	BraceOpen, // todo: it could be cool to store expansions inside this enum..
+	BraceOpenDot,
+	RangeOpen,
 	AfterBrace,
     }
     let mut expansions = vec![];
@@ -105,11 +118,51 @@ fn brace_expansion(str: &str) -> Result<Vec<String>, BraceExpansionError>
 		expansions.push("".to_string());
 		result.push(result.first().expect("There is always at least one element in results when reaching this state").clone());
 	    }
+	    (State::BraceOpen, '.') => {
+		if expansions.len() == 1 && is_numeric_string(&expansions[0]) {
+		    state = State::BraceOpenDot;
+		} else {
+		    expansions
+			.last_mut()
+			.expect("There is always at least one element in expansions when reaching this state")
+			.push(ch);
+		}
+	    }
+	    (State::BraceOpenDot, '.') => {
+		state = State::RangeOpen;
+		expansions.push("".to_string());
+	    }
 	    (State::BraceOpen, '{') => {
 		return Err(BraceExpansionError {
 		    str: str.to_string(),
 		    message: "Cannot open brace within an open brace".to_string()
 		});
+	    }
+	    (State::RangeOpen, '}') => {
+		assert_eq!(expansions.len(), 2);
+		let range_begin: i64 = expansions[0].parse().map_err(
+		    |_| BraceExpansionError {
+			str: str.to_string(),
+			message: "Cannot parse range begin".to_string()
+		    })?;
+		let range_end: i64 = expansions[1].parse().map_err(
+		    |_| BraceExpansionError {
+			str: str.to_string(),
+			message: "Cannot parse range end".to_string()
+		    })?;
+		if range_begin > range_end {
+		    return Err(BraceExpansionError {
+			str: str.to_string(),
+			message: "Ranges must be increasing".to_string()
+		    })
+		}
+		let first_result = result.first().expect("There is always at least one element in results when reaching this state").clone();
+		for value in (range_begin + 1)..=range_end {
+		    result.push(format!("{0}{1}", first_result.clone(), value));
+		}
+		result.first_mut().unwrap().push_str(&format!("{0}", range_begin));
+		expansions.clear();
+		state = State::AfterBrace;
 	    }
 	    (State::BraceOpen, '}') => {
 		assert_eq!(result.len(), expansions.len());
@@ -118,6 +171,29 @@ fn brace_expansion(str: &str) -> Result<Vec<String>, BraceExpansionError>
 		}
 		expansions.clear();
 		state = State::AfterBrace;
+	    }
+	    (State::RangeOpen, x) => {
+		if !x.is_numeric() {
+		    return Err(BraceExpansionError {
+			str: str.to_string(),
+			message: "Range must be numeric".to_string()
+		    });
+		}
+		expansions
+		    .last_mut()
+		    .expect("There is always at least one element in expansions when reaching this state")
+		    .push(x);
+		state = State::RangeOpen;
+	    }
+	    (State::BraceOpenDot, _) => {
+		expansions
+		    .last_mut()
+		    .expect("There is always at least one element in expansions when reaching this state")
+		    .push('.');
+		expansions
+		    .last_mut()
+		    .expect("There is always at least one element in expansions when reaching this state")
+		    .push(ch);
 	    }
 	    (State::BraceOpen, _) => {
 		expansions
@@ -229,12 +305,18 @@ mod tests {
         assert_eq!(brace_expansion("a{b,c}"),
 		   Ok(vec![
 		       "ab".to_string(),
-		       "ac".to_string()
+		       "ac".to_string(),
 		   ]));
         assert_eq!(brace_expansion("a{b,c}d"),
 		   Ok(vec![
 		       "abd".to_string(),
-		       "acd".to_string()
+		       "acd".to_string(),
+		   ]));
+        assert_eq!(brace_expansion("a{b,cc,a}d"),
+		   Ok(vec![
+		       "abd".to_string(),
+		       "accd".to_string(),
+		       "aad".to_string(),
 		   ]));
         assert_eq!(brace_expansion("a{}b"),
 		   Ok(vec!["ab".to_string()]));
@@ -242,6 +324,31 @@ mod tests {
 		   Err(BraceExpansionError {
 		       str: "a{}b{".to_string(),
 		       message: "Can only have one opening brace to expand".to_string()
+		   }));
+        assert_eq!(brace_expansion("a{0..0}"),
+		   Ok(vec![
+		       "a0".to_string(),
+		   ]));
+        assert_eq!(brace_expansion("a{0..1}"),
+		   Ok(vec![
+		       "a0".to_string(),
+		       "a1".to_string(),
+		   ]));
+        assert_eq!(brace_expansion("a{1..3}"),
+		   Ok(vec![
+		       "a1".to_string(),
+		       "a2".to_string(),
+		       "a3".to_string(),
+		   ]));
+        assert_eq!(brace_expansion("a{1,2..3}"),
+		   Ok(vec![
+		       "a1".to_string(),
+		       "a2..3".to_string(),
+		   ]));
+        assert_eq!(brace_expansion("a{2..3,4}"),
+		   Err(BraceExpansionError {
+		       str: "a{2..3,4}".to_string(),
+		       message: "Range must be numeric".to_string()
 		   }));
     }
 }
