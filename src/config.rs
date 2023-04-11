@@ -41,10 +41,10 @@ impl fmt::Display for ParseError {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialOrd, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialOrd, PartialEq, Ord)]
 pub struct PortName(pub String);
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialOrd, PartialEq, Ord)]
 #[serde(deny_unknown_fields)]
 pub struct NamedLink {
     pub src: PortName,

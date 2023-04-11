@@ -331,6 +331,7 @@ impl Main {
 			    links.0.push(config::NamedLink { src, dst });
 			}
 		    }
+		    links.0.sort();
 		    let config = config::Config { links };
 		    config.dump();
 		}
