@@ -11,7 +11,7 @@ jobs:
         with:
           room_id: ${{ secrets.MATRIX_ROOM_ID }}
           access_token: ${{ secrets.MATRIX_ACCESS_TOKEN }}
-          message: "pw-connections ${{ github.sha }} build started. [Progress.](https://github.com/eras/midihidi/actions/runs/${{github.run_id}})"
+          message: "pw-connections ${{ github.sha }} build started. [Progress.](https://github.com/eras/pw-connections/actions/runs/${{github.run_id}})"
           server: ${{ secrets.MATRIX_SERVER }}
   build:
     needs: notify_start
@@ -65,7 +65,7 @@ jobs:
         with:
           room_id: ${{ secrets.MATRIX_ROOM_ID }}
           access_token: ${{ secrets.MATRIX_ACCESS_TOKEN }}
-          message: "pw-connections ${{ github.sha }} build complete OK. [Logs.](https://github.com/eras/midihidi/actions/runs/${{github.run_id}})"
+          message: "pw-connections ${{ github.sha }} build complete OK. [Logs.](https://github.com/eras/pw-connections/actions/runs/${{github.run_id}})"
           server: ${{ secrets.MATRIX_SERVER }}
   notify_end_failed:
     runs-on: ubuntu-latest
@@ -77,5 +77,5 @@ jobs:
         with:
           room_id: ${{ secrets.MATRIX_ROOM_ID }}
           access_token: ${{ secrets.MATRIX_ACCESS_TOKEN }}
-          message: "pw-connections ${{ github.sha }} build failed. [Logs.](https://github.com/eras/midihidi/actions/runs/${{github.run_id}})"
+          message: "pw-connections ${{ github.sha }} build failed. [Logs.](https://github.com/eras/pw-connections/actions/runs/${{github.run_id}})"
           server: ${{ secrets.MATRIX_SERVER }}
