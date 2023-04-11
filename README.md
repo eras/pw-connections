@@ -40,18 +40,17 @@ links:
     dst: "Novation SL MkIII 1:(playback_1) Novation SL MkIII MIDI 2"
   - src: "Virtual Raw MIDI 4-3 4:(capture_0) VirMIDI 4-3"
     dst: "Novation SL MkIII 1:(playback_2) Novation SL MkIII MIDI 3"
-  - src: "Novation SL MkIII 1:(capture_0) Novation SL MkIII MIDI 1"
-    dst: "Virtual Raw MIDI 4-1 4:(playback_0) VirMIDI 4-1"
-  - src: "Novation SL MkIII 1:(capture_1) Novation SL MkIII MIDI 2"
-    dst: "Virtual Raw MIDI 4-2 4:(playback_0) VirMIDI 4-2"
-  - src: "Novation SL MkIII 1:(capture_2) Novation SL MkIII MIDI 3"
-    dst: "Virtual Raw MIDI 4-3 4:(playback_0) VirMIDI 4-3"
+  - src: "Novation SL MkIII 1:(capture_0) Novation SL MkIII MIDI {1,2,3}"
+    dst: "Virtual Raw MIDI 4-1 4:(playback_0) VirMIDI 4-{1..3}"
   - src: "Novation SL MkIII 1:(capture_0) Novation SL MkIII MIDI 1"
     dst: "ALC257 Analog:playback_FR"
 ```
 
-You can get this kind of output with `pw-connections --dump` as a nice
-starting point.
+Note the use of brace expansion to handle multiple connections more
+easily.
+
+You can get compatible configuration with `pw-connections --dump >
+config.yaml` as a nice starting point.
 
 Recall that you can pretty much embed JSON inside YAML, so you should
 be able to use JSON as configuration as well.
