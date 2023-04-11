@@ -14,7 +14,7 @@ use libspa as spa;
 use pipewire as pw;
 use spa::ReadableDict;
 
-use clap::Parser;
+use clap::{Parser, ArgGroup};
 
 use config::PortName;
 
@@ -32,10 +32,15 @@ use config::PortName;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
+#[clap(group(
+    ArgGroup::new("mode")
+        .required(true)
+        .args(&["config", "dump"]),
+))]
 struct Args {
     /// Name of the config file to use
     #[arg(short, long)]
-    config: String,
+    config: Option<String>,
 
     #[arg(short, long)]
     dump: bool,
@@ -432,7 +437,12 @@ impl Main {
 fn work() -> Result<(), error::Error> {
     let args = Args::parse();
 
-    let config = config::Config::load(&args.config)?;
+    let config = {
+	match args.config.map(|config| config::Config::load(&config)) {
+	    Some(result) => result?,
+	    None => config::Config::default(),
+	}
+    };
 
     pw::init();
 
