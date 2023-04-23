@@ -435,23 +435,13 @@ impl Main {
     }
 }
 
-fn work() -> Result<(), error::Error> {
-    let args = Args::parse();
-
-    let config = {
-	match args.config.map(|config| config::Config::load(&config)) {
-	    Some(result) => result?,
-	    None => config::Config::default(),
-	}
-    };
-
+fn pw_loop(args: &Args, config: &config::Config) -> Result<(), error::Error> {
     pw::init();
 
     let mainloop = pw::MainLoop::new().expect("Failed to create Pipewire Mainloop");
     let context = pw::Context::new(&mainloop).expect("Failed to create Pipewire Context");
     let core = context
-        .connect(None)
-        .expect("Failed to connect to Pipewire Core");
+        .connect(None)?;
 
     let (global_tx, global_rx) = channel::<Message>();
     let global_remove_tx = global_tx.clone();
@@ -499,12 +489,40 @@ fn work() -> Result<(), error::Error> {
         .global_remove(move |msg| global_remove_callback(&global_remove_tx, msg))
         .register();
 
-    let mut main = Main::new(config.links, args.dump);
+    let mut main = Main::new(config.links.clone(), args.dump);
     let _thread = thread::spawn(move || main.control_thread(global_rx, pwcontrol_tx));
 
     mainloop.run();
 
     Ok(())
+}
+
+fn work() -> Result<(), error::Error> {
+    let args = Args::parse();
+
+    let config = {
+	match args.config.clone().map(|config| config::Config::load(&config)) {
+	    Some(result) => result?,
+	    None => config::Config::default(),
+	}
+    };
+
+    loop {
+	match pw_loop(&args, &config) {
+	    Ok(()) => break Ok(()),
+	    Err(error @ error::Error::PipewireError(_)) =>
+		if args.dump {
+		    break Err(error)
+		} else {
+                    eprintln!(
+                        "pw-connections: Pipewire error: {error}; restarting after 1 second"
+		    );
+		    thread::sleep(time::Duration::from_millis(1000))
+		}
+	    error @ Err(_) =>
+		break error
+	}
+    }
 }
 
 fn main() {

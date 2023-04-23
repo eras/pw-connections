@@ -10,4 +10,7 @@ pub(crate) enum Error {
 
     #[error(transparent)]
     ConfigError(#[from] config::Error),
+
+    #[error(transparent)]
+    PipewireError(#[from] pipewire::Error),
 }

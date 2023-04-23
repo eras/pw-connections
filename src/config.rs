@@ -54,7 +54,7 @@ pub struct NamedLink {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct NamedLinks(pub Vec<NamedLink>);
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     pub links: NamedLinks,
 }
