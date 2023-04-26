@@ -9,6 +9,7 @@ use std::rc::Rc;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::thread;
 use std::time;
+use std::sync::{Arc, Mutex};
 
 use libspa as spa;
 use pipewire as pw;
@@ -26,9 +27,13 @@ use config::PortName;
 //     println!("done: {a:?} {b:?}");
 // }
 
-// fn error_callback(a: u32, b: i32, c: i32, msg: &str) {
-//     println!("error: {a:?} {b:?} {c:?} {msg}");
-// }
+fn error_callback(a: u32, b: i32, c: i32, msg: &str,
+		  tx: &pw::channel::Sender<PWRequest>) {
+    eprintln!("error: {a:?} {b:?} {c:?} {msg}");
+
+    // could be exiting already
+    let _ignore = tx.send(PWRequest::Quit(QuitReason::Error));
+}
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -128,11 +133,17 @@ enum Message {
     Remove(ObjectId),
 }
 
+#[derive(Debug, Clone)]
+enum QuitReason {
+    Error,
+    Done,
+}
+
 /// Request to PipeWire
 #[derive(Debug)]
 enum PWRequest {
     MakeLink((Port, Port)),
-    Quit,
+    Quit(QuitReason),
 }
 
 fn global_callback(
@@ -301,7 +312,9 @@ impl Main {
         }
     }
 
-    fn control_thread(&mut self, rx: Receiver<Message>, tx: pw::channel::Sender<PWRequest>) {
+    fn control_thread(&mut self,
+		      rx: Receiver<Message>,
+		      tx: Arc<Mutex<pw::channel::Sender<PWRequest>>>) {
         let mut stable; // seems things are settled, no messages in a short while
         #[allow(unused_mut)] let mut enable_dump = false;
 	let mut processing = true;
@@ -309,7 +322,10 @@ impl Main {
             let message = match rx.recv_timeout(time::Duration::from_millis(100)) {
                 Ok(message) => Some(message),
                 Err(RecvTimeoutError::Timeout) => None,
-                Err(_err) => panic!("message receive failed"),
+                Err(RecvTimeoutError::Disconnected) => {
+		    processing = false;
+		    None
+		}
             };
             if let Some(message) = message {
                 if enable_dump {
@@ -320,8 +336,11 @@ impl Main {
             } else {
                 stable = true;
 		if self.dump_and_exit {
-                    tx.send(PWRequest::Quit)
-                        .expect("communicating with pw failed");
+		    {
+			let tx = tx.lock().expect("Failed to lock TX");
+			// could be exiting already
+			let _ignore = tx.send(PWRequest::Quit(QuitReason::Done));
+		    }
 		    processing = false;
 		    let mut links = config::NamedLinks::default();
 		    for link in &self.links {
@@ -365,7 +384,7 @@ impl Main {
 			self.do_link(
                             &name_dir_input_port_id,
                             &name_dir_output_port_id,
-                            &tx,
+                            tx.clone(),
                             &named_link.src,
                             &named_link.dst,
 			);
@@ -379,7 +398,7 @@ impl Main {
         &mut self,
         name_dir_input_port_id: &HashMap<PortName, PortObjectId<Input>>,
         name_dir_output_port_id: &HashMap<PortName, PortObjectId<Output>>,
-        tx: &pw::channel::Sender<PWRequest>,
+        tx: Arc<Mutex<pw::channel::Sender<PWRequest>>>,
         src_name: &PortName,
         dst_name: &PortName,
     ) {
@@ -417,8 +436,12 @@ impl Main {
                         src_port.port_name.0, &dst_port.port_name.0
                     );
                     //println!("link {src_port:?} -> {dst_port:?}",);
-                    tx.send(PWRequest::MakeLink((src_port, dst_port)))
-                        .expect("communicating with pw failed");
+		    {
+			let tx = tx.lock().expect("Failed to lock tx");
+
+			// could be exiting already
+			let _ignore = tx.send(PWRequest::MakeLink((src_port, dst_port)));
+		    }
 		    self.failed_pairs.remove(&pair);
                 } else if !self.failed_pairs.contains(&pair) {
 		    eprintln!(
@@ -435,7 +458,7 @@ impl Main {
     }
 }
 
-fn pw_loop(args: &Args, config: &config::Config) -> Result<(), error::Error> {
+fn pw_loop(args: &Args, config: &config::Config) -> Result<QuitReason, error::Error> {
     pw::init();
 
     let mainloop = pw::MainLoop::new().expect("Failed to create Pipewire Mainloop");
@@ -447,13 +470,21 @@ fn pw_loop(args: &Args, config: &config::Config) -> Result<(), error::Error> {
     let global_remove_tx = global_tx.clone();
 
     let (pwcontrol_tx, pwcontrol_rx) = pw::channel::channel();
+    let pwcontrol_tx = Arc::new(Mutex::new(pwcontrol_tx));
+
+    let quit_reason = Arc::new(Mutex::new(None));
 
     let _receiver = pwcontrol_rx.attach(&mainloop, {
         let mainloop = mainloop.clone();
+        let quit_reason = quit_reason.clone();
         let core = core.clone();
         let linksies = Rc::new(RefCell::new(Vec::new()));
         move |request| match request {
-            PWRequest::Quit => mainloop.quit(),
+            PWRequest::Quit(quit_reason_) => {
+		let mut quit_reason = quit_reason.lock().expect("Failed to lock quit reason?!");
+		*quit_reason = Some(quit_reason_);
+		mainloop.quit()
+	    }
             PWRequest::MakeLink((output, input)) => {
                 let link = core
                     .create_object::<pw::link::Link, _>(
@@ -476,12 +507,18 @@ fn pw_loop(args: &Args, config: &config::Config) -> Result<(), error::Error> {
 
     let registry = core.get_registry().expect("wtf");
 
-    // let _listener = core
-    //     .add_listener_local()
-    //     .error(error_callback)
+     let _listener = core
+        .add_listener_local()
+        .error({
+	    let pwcontrol_tx = pwcontrol_tx.clone();
+	    move |a: u32, b: i32, c: i32, msg: &str| {
+		let tx = pwcontrol_tx.lock().expect("Failed to lock tx");
+		error_callback(a, b, c, msg, &tx)
+	    }
+	})
     //     .info(info_callback)
     //     .done(done_callback)
-    //     .register();
+        .register();
 
     let _registry_listener = registry
         .add_listener_local()
@@ -494,7 +531,9 @@ fn pw_loop(args: &Args, config: &config::Config) -> Result<(), error::Error> {
 
     mainloop.run();
 
-    Ok(())
+    let quit_reason = quit_reason.lock().expect("Failed to lock quit reason?!");
+
+    Ok(quit_reason.clone().expect("Quit reason not set, pwcontrol_rx.attach never called callback to exit?!"))
 }
 
 fn work() -> Result<(), error::Error> {
@@ -509,7 +548,8 @@ fn work() -> Result<(), error::Error> {
 
     loop {
 	match pw_loop(&args, &config) {
-	    Ok(()) => break Ok(()),
+	    Ok(QuitReason::Done) => break Ok(()),
+	    Ok(QuitReason::Error) => (),
 	    Err(error @ error::Error::PipewireError(_)) =>
 		if args.dump {
 		    break Err(error)
@@ -519,8 +559,8 @@ fn work() -> Result<(), error::Error> {
 		    );
 		    thread::sleep(time::Duration::from_millis(1000))
 		}
-	    error @ Err(_) =>
-		break error
+	    Err(error) =>
+		break Err(error)
 	}
     }
 }
